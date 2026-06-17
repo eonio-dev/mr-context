@@ -67,12 +67,20 @@ jobs:
 
       - name: Commit, tag, and push
         run: |
+          VERSION="${{ steps.version.outputs.version }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json src/vscode/package.json
-          git commit -m "chore: release v${{ steps.version.outputs.version }}"
-          git tag "v${{ steps.version.outputs.version }}"
-          git push --follow-tags
+
+          # Idempotent: if the tag already exists the commit was pushed in a
+          # previous attempt that failed only at the publish step — skip ahead.
+          if git ls-remote --tags origin "refs/tags/v${VERSION}" | grep -q .; then
+            echo "Tag v${VERSION} already exists — skipping (publish step will retry)"
+          else
+            git add package.json src/vscode/package.json
+            git commit -m "chore: release v${VERSION}"
+            git tag "v${VERSION}"
+            git push --follow-tags
+          fi
 
       - name: Publish to npm
         run: npm publish --access public
