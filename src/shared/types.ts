@@ -55,8 +55,23 @@ export interface ExtractionResult {
   metadata: RepositoryMetadata[];
 }
 
+// A repository can be a bare URL string (uses the global `branch`) or an
+// object that overrides the branch for that repo only.
+export interface RepoSpec {
+  url: string;
+  branch?: string;
+}
+
+export type RepoEntry = string | RepoSpec;
+
+// A repository spec with its branch already resolved.
+export interface ResolvedRepo {
+  url: string;
+  branch: string;
+}
+
 export interface MrcConfig {
-  repositories: string[];
+  repositories: RepoEntry[];
   githubToken?: string;
   branch?: string;
   includePatterns?: string[];

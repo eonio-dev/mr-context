@@ -16,9 +16,11 @@ export function parseRepositoryUrl(url: string): ParsedRepoUrl {
 
 export async function fetchRepositoryMetadata(
   url: string,
-  config: MrcConfig
+  config: MrcConfig,
+  branch?: string
 ): Promise<RepositoryMetadata> {
-  const { owner, name, branch } = parseRepositoryUrl(url);
+  const parsed = parseRepositoryUrl(url);
+  const { owner, name } = parsed;
   const octokit = new Octokit({ auth: config.githubToken ?? process.env.GITHUB_TOKEN });
 
   const repoData = await octokit.repos.get({ owner, repo: name }).catch(() => null);
@@ -28,7 +30,7 @@ export async function fetchRepositoryMetadata(
     url,
     owner,
     name,
-    branch: info?.default_branch ?? branch,
+    branch: branch ?? parsed.branch ?? info?.default_branch ?? "main",
     description: info?.description ?? null,
     topics: info?.topics ?? [],
     language: info?.language ?? null,

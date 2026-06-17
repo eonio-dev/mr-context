@@ -63,12 +63,16 @@ Create `.mrc/config.json` in your project root:
 {
   "repositories": [
     "https://github.com/your-org/your-api",
-    "https://github.com/your-org/your-shared-types"
+    { "url": "https://github.com/your-org/your-shared-types", "branch": "develop" }
   ],
   "branch": "main",
   "maxContextNodes": 25
 }
 ```
+
+Each repository is either a URL string (which uses the top-level `branch`) or an
+object `{ "url": ..., "branch": ... }` to pin a per-repo branch. The top-level
+`branch` is the default for any string entry (falls back to `main`).
 
 Set `GITHUB_TOKEN` environment variable for private repositories.
 
