@@ -1,0 +1,19 @@
+{
+  "_comment": "GitHub token: set GITHUB_TOKEN env var or use `gh auth token`. Never commit the token itself.",
+  "repositories": [
+    "https://github.com/eonio-dev/acme-payments-api",
+    "https://github.com/eonio-dev/acme-shared-types",
+    "https://github.com/eonio-dev/acme-frontend"
+  ],
+  "branch": "main",
+  "includePatterns": [
+    "**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"
+  ],
+  "excludePatterns": [
+    "**/node_modules/**", "**/dist/**", "**/build/**",
+    "**/*.test.*", "**/*.spec.*", "**/*.d.ts"
+  ],
+  "maxFileSizeBytes": 100000,
+  "graphCachePath": ".mrc-graph.json",
+  "maxContextNodes": 25
+}

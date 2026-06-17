@@ -1,0 +1,61 @@
+{
+  "name": "mr-context",
+  "version": "1.0.0",
+  "description": "Multi-Repository Context Agent — semantic graph context for AI-assisted development via GitHub Copilot",
+  "homepage": "https://github.com/eonio-dev/mr-context",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eonio-dev/mr-context.git"
+  },
+  "license": "MIT",
+  "author": "Eonio Dev <https://github.com/eonio-dev>",
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "bin": {
+    "mrc": "./dist/cli/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "mr-context",
+    "mrc",
+    "copilot",
+    "ai-context",
+    "semantic-graph",
+    "multi-repo",
+    "vscode",
+    "github-copilot",
+    "llm",
+    "codebase-context"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc --watch -p tsconfig.json",
+    "test:extract": "npx tsx scripts/test-extraction.ts",
+    "test:query": "npx tsx scripts/eval-query.ts"
+  },
+  "dependencies": {
+    "@octokit/rest": "^20.1.1",
+    "chalk": "^5.3.0",
+    "commander": "^12.0.0",
+    "glob": "^10.3.12",
+    "ora": "^8.0.1",
+    "typescript": "^5.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "tsx": "^4.9.3"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.0.0"
+  }
+}

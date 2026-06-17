@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+.mrc-graph.json
+*.vsix
+*.tsbuildinfo
+.DS_Store
+Thumbs.db

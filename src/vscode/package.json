@@ -1,0 +1,114 @@
+{
+  "name": "mr-context",
+  "displayName": "Mr. Context",
+  "description": "Multi-Repository semantic graph context for GitHub Copilot. Reduce hallucinations and token waste during AI-assisted development.",
+  "version": "1.0.0",
+  "publisher": "eonio-dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eonio-dev/mr-context"
+  },
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": ["AI", "Other"],
+  "keywords": [
+    "copilot", "ai", "context", "multi-repo",
+    "semantic-graph", "mr-context", "mrc"
+  ],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./dist/vscode/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "mr-context.openPanel",
+        "title": "Open Mr. Context Panel",
+        "category": "Mr. Context",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "mr-context.buildGraph",
+        "title": "Build / Refresh Semantic Graph",
+        "category": "Mr. Context",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "mr-context.querySelection",
+        "title": "Ask Mr. Context About Selection",
+        "category": "Mr. Context",
+        "icon": "$(search)"
+      },
+      {
+        "command": "mr-context.showInfo",
+        "title": "Show Graph Statistics",
+        "category": "Mr. Context",
+        "icon": "$(info)"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "mr-context.querySelection",
+          "when": "editorHasSelection",
+          "group": "mr-context"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "mr-context.openPanel",
+        "key": "ctrl+shift+m",
+        "mac": "cmd+shift+m",
+        "when": "editorTextFocus"
+      }
+    ],
+    "chatParticipants": [
+      {
+        "id": "mr-context.agent",
+        "fullName": "Mr. Context",
+        "name": "mrc",
+        "description": "Multi-repository semantic context for Copilot Chat. Ask @mrc anything about your codebase.",
+        "isSticky": true,
+        "commands": [
+          { "name": "query",    "description": "Answer a question about the codebase" },
+          { "name": "feature",  "description": "Plan and scaffold a new feature" },
+          { "name": "review",   "description": "Review a diff or code snippet" },
+          { "name": "onboard",  "description": "Get a developer onboarding guide" },
+          { "name": "patterns", "description": "Detect and explain design patterns" }
+        ]
+      }
+    ],
+    "configuration": {
+      "title": "Mr. Context",
+      "properties": {
+        "mr-context.configPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to .mrcaconfig file (defaults to workspace root)"
+        },
+        "mr-context.maxContextNodes": {
+          "type": "number",
+          "default": 25,
+          "description": "Maximum graph nodes to include in each LLM prompt"
+        },
+        "mr-context.autoEnrich": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically enrich graph with semantic summaries on startup"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc --watch -p tsconfig.json",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^2.24.0",
+    "typescript": "^5.4.0"
+  }
+}
