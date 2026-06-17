@@ -1,7 +1,7 @@
 // src/cli/commands/info.ts
 import { Command } from "commander";
 import chalk from "chalk";
-import { loadConfig, CONFIG_PATH, GRAPH_PATH } from "../../shared/config.js";
+import { loadConfig, resolveRepos, CONFIG_PATH, GRAPH_PATH } from "../../shared/config.js";
 import { loadGraph } from "../../graph/index.js";
 
 export function infoCommand(): Command {
@@ -13,12 +13,15 @@ export function infoCommand(): Command {
 
       console.log(chalk.bold("\nMr. Context Configuration\n"));
       console.log(chalk.gray("  Repositories:"));
-      if (config.repositories.length === 0) {
+      const repos = resolveRepos(config);
+      if (repos.length === 0) {
         console.log(chalk.yellow("    (none configured)"));
       } else {
-        config.repositories.forEach((r) => console.log(chalk.gray(`    • ${r}`)));
+        repos.forEach((r) =>
+          console.log(chalk.gray(`    • ${r.url} `) + chalk.dim(`@${r.branch}`))
+        );
       }
-      console.log(chalk.gray(`\n  Branch:       ${config.branch ?? "main"}`));
+      console.log(chalk.gray(`\n  Default branch: ${config.branch ?? "main"}`));
       console.log(chalk.gray(`  Max nodes:    ${config.maxContextNodes ?? 25}`));
       console.log(chalk.gray(`  Graph cache:  ${config.graphCachePath ?? GRAPH_PATH}`));
       console.log(

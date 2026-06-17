@@ -1,19 +1,21 @@
 // src/extraction/index.ts
-import type { ExtractionResult, MrcConfig } from "../shared/types.js";
+import type { ExtractionResult, MrcConfig, ResolvedRepo } from "../shared/types.js";
+import { resolveRepos } from "../shared/config.js";
 import { extractWithRepomix } from "./repomix.js";
 import { fetchRepositoryMetadata } from "./github.js";
 
 export async function extractRepositories(
   config: MrcConfig
 ): Promise<ExtractionResult> {
-  if (config.repositories.length === 0) {
+  const repos = resolveRepos(config);
+  if (repos.length === 0) {
     throw new Error(
       "No repositories configured. Add URLs to your .mrc/config.json file or set MRC_REPOS."
     );
   }
 
   const results = await Promise.allSettled(
-    config.repositories.map((url) => extractSingle(url, config))
+    repos.map((repo) => extractSingle(repo, config))
   );
 
   const files = [];
@@ -26,7 +28,7 @@ export async function extractRepositories(
       metadata.push(result.value.metadata);
     } else {
       console.warn(
-        `[mr-context] Failed to extract ${config.repositories[i]}: ${result.reason}`
+        `[mr-context] Failed to extract ${repos[i].url}@${repos[i].branch}: ${result.reason}`
       );
     }
   }
@@ -34,17 +36,17 @@ export async function extractRepositories(
   return { files, metadata };
 }
 
-async function extractSingle(url: string, config: MrcConfig) {
+async function extractSingle(repo: ResolvedRepo, config: MrcConfig) {
   const [files, meta] = await Promise.all([
     extractWithRepomix({
-      url,
-      branch: config.branch ?? "main",
+      url: repo.url,
+      branch: repo.branch,
       githubToken: config.githubToken,
       includePatterns: config.includePatterns ?? [],
       excludePatterns: config.excludePatterns ?? [],
       maxFileSizeBytes: config.maxFileSizeBytes ?? 100_000,
     }),
-    fetchRepositoryMetadata(url, config),
+    fetchRepositoryMetadata(repo.url, config, repo.branch),
   ]);
 
   const filtered = files.filter((f) => f.size <= (config.maxFileSizeBytes ?? 100_000));
