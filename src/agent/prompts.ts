@@ -43,5 +43,5 @@ instance. Also flag anti-patterns with suggested remedies.`,
 
 export function buildContextualPrompt(skill: string, contextBlock: string): string {
   const base = SKILL_PROMPTS[skill] ?? SKILL_PROMPTS["query"];
-  return `${base}\n\n---\n\n## Semantic Graph Context\n\n${contextBlock}\n\n---\n\nAnswer based on the context. Use tools if you need more specific information.`;
+  return `${base}\n\n---\n\n## Semantic Graph Context\n\n${contextBlock}\n\n---\n\nAnswer using ONLY the context above. Call a tool ONLY if a specific detail is absent from the context — do not call tools to confirm what is already stated here.`;
 }
