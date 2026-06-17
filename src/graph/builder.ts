@@ -132,6 +132,7 @@ export function buildSyntacticGraph(
       imports: [...new Set(imports)],
       patterns: detectPatterns(file.content),
       summary: "",
+      size: file.size,
     });
   }
 

@@ -14,6 +14,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { loadConfig, resolveRepos, GRAPH_PATH } from "../shared/config.js";
+import { recordRetrieval } from "../shared/telemetry.js";
 import { loadGraph } from "../graph/index.js";
 import { queryGraph, formatContextBlock } from "../graph/query.js";
 import { executeTool } from "../agent/tools.js";
@@ -91,7 +92,9 @@ server.registerTool(
       const { graph, config } = getState();
       const k = topK ?? config.maxContextNodes ?? 25;
       const nodes = await queryGraph(graph, query, k);
-      return textResult(formatContextBlock(nodes));
+      const block = formatContextBlock(nodes);
+      recordRetrieval(config, query, nodes, block);
+      return textResult(block);
     } catch (err) {
       return errorResult(err);
     }

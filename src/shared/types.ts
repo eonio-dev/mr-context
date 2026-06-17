@@ -33,6 +33,9 @@ export interface SemanticNode {
   patterns: string[];
   summary: string;
   embedding?: number[];
+  // Raw source size in bytes (when known) — used to estimate the baseline
+  // token cost of reading the file directly, for token-savings telemetry.
+  size?: number;
 }
 
 export interface GraphEdge {
@@ -80,4 +83,6 @@ export interface MrcConfig {
   graphCachePath?: string;
   maxContextNodes?: number;
   embeddingModel?: string;
+  // Set false to disable local token-savings telemetry (.mrc/data/stats.json).
+  telemetry?: boolean;
 }

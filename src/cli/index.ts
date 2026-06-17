@@ -5,6 +5,7 @@ import chalk from "chalk";
 import { buildCommand } from "./commands/build.js";
 import { infoCommand } from "./commands/info.js";
 import { searchCommand } from "./commands/search.js";
+import { statsCommand } from "./commands/stats.js";
 
 const VERSION = "1.0.0";
 
@@ -31,6 +32,9 @@ ${chalk.bold("Examples:")}
   ${chalk.gray("# Show configuration and graph statistics")}
   mrc info
 
+  ${chalk.gray("# Show cumulative token savings")}
+  mrc stats
+
   ${chalk.gray("# Force a full rebuild")}
   mrc build --force
 `
@@ -39,5 +43,6 @@ ${chalk.bold("Examples:")}
 program.addCommand(buildCommand());
 program.addCommand(infoCommand());
 program.addCommand(searchCommand());
+program.addCommand(statsCommand());
 
 program.parse(process.argv);

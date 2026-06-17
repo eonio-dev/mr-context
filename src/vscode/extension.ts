@@ -5,6 +5,7 @@ import { MrcPanel } from "./panel.js";
 import { detectSkill } from "../agent/skills.js";
 import type { SkillName } from "../agent/skills.js";
 import { registerMrcTools } from "./lmTools.js";
+import { registerTelemetryStatus } from "./telemetryStatus.js";
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const cts = new vscode.CancellationTokenSource();
@@ -13,6 +14,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // Expose Mr. Context as Language Model Tools so Copilot agent mode can use
   // the semantic graph automatically, without an explicit @mrc mention.
   registerMrcTools(context);
+
+  // Status-bar indicator + command for token-savings telemetry.
+  registerTelemetryStatus(context);
 
   // Pre-warm agent in background so first @mrc invocation is instant
   vscode.window.withProgress(

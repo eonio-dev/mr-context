@@ -94,6 +94,22 @@ The server resolves `.mrc/config.json` and `.mrc/data/graph.json` from its worki
 directory. Override with `MRC_CONFIG` / `MRC_GRAPH` environment variables. It
 hot-reloads the graph when `mrc build` rewrites the cache — no restart needed.
 
+### Token-savings telemetry
+
+Every `ask` retrieval (Copilot agent mode and MCP) records how many tokens the
+returned context block cost versus the baseline of reading the matched files in
+full. Aggregates are written locally to `.mrc/data/stats.json`.
+
+```bash
+mrc stats          # cumulative totals in the terminal
+```
+
+In VS Code a status-bar item shows tokens saved this session; click it (or run
+**Mr. Context: Show Token Savings**) for the cumulative totals. Telemetry is
+local-only — disable with `"telemetry": false` in `.mrc/config.json` or
+`MRC_NO_TELEMETRY=1`. Baseline accuracy improves after a `mrc build` on this
+version, which records each file's size in the graph.
+
 ---
 
 ## How It Works

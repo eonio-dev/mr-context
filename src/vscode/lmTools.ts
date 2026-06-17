@@ -10,6 +10,8 @@ import { getAgent } from "../agent/registry.js";
 import { executeTool } from "../agent/tools.js";
 import type { ToolName } from "../agent/tools.js";
 import { formatContextBlock } from "../graph/query.js";
+import { recordRetrieval } from "../shared/telemetry.js";
+import { onRetrievalRecorded } from "./telemetryStatus.js";
 
 function toResult(text: string): vscode.LanguageModelToolResult {
   return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(text)]);
@@ -29,6 +31,8 @@ class AskTool implements vscode.LanguageModelTool<AskInput> {
     const nodes = await agent.getContext(options.input.query, options.input.topK);
     const budget = options.tokenizationOptions?.tokenBudget ?? 4000;
     const block = formatContextBlock(nodes, budget);
+    const record = recordRetrieval(agent.getConfig(), options.input.query, nodes, block);
+    if (record) onRetrievalRecorded(record);
     return toResult(block);
   }
 

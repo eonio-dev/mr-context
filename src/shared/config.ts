@@ -8,6 +8,7 @@ import type { MrcConfig, ResolvedRepo } from "./types.js";
 export const MRC_DIR = ".mrc";
 export const CONFIG_PATH = `${MRC_DIR}/config.json`;
 export const GRAPH_PATH = `${MRC_DIR}/data/graph.json`;
+export const STATS_PATH = `${MRC_DIR}/data/stats.json`;
 
 const DEFAULTS: Required<Omit<MrcConfig, "repositories" | "githubToken">> = {
   branch: "main",
@@ -20,6 +21,7 @@ const DEFAULTS: Required<Omit<MrcConfig, "repositories" | "githubToken">> = {
   graphCachePath: GRAPH_PATH,
   maxContextNodes: 25,
   embeddingModel: "text-embedding-3-small",
+  telemetry: true,
 };
 
 export function loadConfig(configPath?: string): MrcConfig {

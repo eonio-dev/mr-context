@@ -44,6 +44,12 @@
         "title": "Show Graph Statistics",
         "category": "Mr. Context",
         "icon": "$(info)"
+      },
+      {
+        "command": "mr-context.showSavings",
+        "title": "Show Token Savings",
+        "category": "Mr. Context",
+        "icon": "$(rocket)"
       }
     ],
     "menus": {
