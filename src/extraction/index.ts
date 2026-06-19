@@ -1,7 +1,7 @@
 // src/extraction/index.ts
 import type { ExtractionResult, MrcConfig, ResolvedRepo } from "../shared/types.js";
 import { resolveRepos, REPOS_DIR, MRC_DIR } from "../shared/config.js";
-import { resolve } from "path";
+import { resolve, relative } from "path";
 import { cloneOrUpdateRepo, readOriginUrl, readCurrentBranch, sameRepo } from "./clone.js";
 import { extractLocalFiles } from "./local.js";
 import { parseRepositoryUrl, fetchRepositoryMetadata } from "./github.js";
@@ -16,8 +16,7 @@ export async function extractRepositories(
     );
   }
 
-  const reposDirName = config.reposDir ?? REPOS_DIR;
-  const reposDir = resolve(process.cwd(), reposDirName);
+  const reposDir = resolve(process.cwd(), config.reposDir ?? REPOS_DIR);
 
   // If the current directory is itself one of the configured repos, index it
   // in place instead of cloning over the user's working tree.
@@ -25,7 +24,7 @@ export async function extractRepositories(
   const originUrl = readOriginUrl(cwd);
 
   const results = await Promise.allSettled(
-    repos.map((repo) => extractSingle(repo, config, reposDir, reposDirName, cwd, originUrl))
+    repos.map((repo) => extractSingle(repo, config, reposDir, cwd, originUrl))
   );
 
   const files = [];
@@ -50,7 +49,6 @@ async function extractSingle(
   repo: ResolvedRepo,
   config: MrcConfig,
   reposDir: string,
-  reposDirName: string,
   cwd: string,
   originUrl: string | null,
 ) {
@@ -67,11 +65,15 @@ async function extractSingle(
         githubToken: config.githubToken,
       });
 
-  // When indexing the working repo in place, the clones dir and .mrc live
-  // underneath it — exclude them so B/C files aren't double-counted under A.
+  // When indexing the working repo in place, .mrc (which holds the clones and
+  // the graph) lives underneath it — exclude it so sibling clones and cache
+  // files aren't double-counted under the local repo. Use a path relative to
+  // the working tree so it matches glob output regardless of absolute reposDir.
   const excludePatterns = [...(config.excludePatterns ?? [])];
   if (isLocal) {
-    excludePatterns.push(`${reposDirName}/**`, `${MRC_DIR}/**`);
+    excludePatterns.push(`${MRC_DIR}/**`);
+    const relRepos = relative(cwd, reposDir).replace(/\\/g, "/");
+    if (relRepos && !relRepos.startsWith("..")) excludePatterns.push(`${relRepos}/**`);
   }
 
   const { owner, name } = parseRepositoryUrl(repo.url);
