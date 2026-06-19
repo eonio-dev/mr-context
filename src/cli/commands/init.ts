@@ -68,7 +68,8 @@ export function initCommand(): Command {
 
       console.log();
       console.log(chalk.bold("  Next steps:"));
-      console.log(chalk.gray(`  1. Edit ${CONFIG_PATH} — set each repository's url and branch`));
+      console.log(chalk.gray(`  1. Edit ${CONFIG_PATH} — add 2+ repositories (url + branch)`));
+      console.log(chalk.dim("     mr-context shines with 2+ repos — its edge is cross-repo context."));
       console.log(chalk.gray("  2. Set the GITHUB_TOKEN env var for private repos (or configure SSH)"));
       console.log(chalk.gray("  3. Run mrc build — clones repos into .mrc/repos and builds the graph\n"));
     });

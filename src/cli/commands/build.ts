@@ -24,6 +24,13 @@ export function buildCommand(): Command {
         process.exit(1);
       }
 
+      if (config.repositories.length === 1) {
+        console.log(
+          chalk.yellow("  ⚠ Only 1 repo configured.") +
+          chalk.gray(" mr-context shines with 2+ — its edge is cross-repo context.")
+        );
+      }
+
       const cachePath = config.graphCachePath ?? GRAPH_PATH;
 
       if (!opts.force) {
