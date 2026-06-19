@@ -44,4 +44,6 @@ export async function loadOrBuildGraph(
 
 export { buildSyntacticGraph, buildNode } from "./builder.js";
 export { enrichNodes } from "./enrichment.js";
+export { embedNodes, nodeEmbeddingText, cosineSim } from "./embedding.js";
+export type { EmbeddingProvider } from "./embedding.js";
 export { queryGraph, formatContextBlock, buildScorer } from "./query.js";

@@ -6,7 +6,8 @@ import * as vscode from "vscode";
 import { resolve } from "path";
 import type { SemanticGraph, MrcConfig } from "../shared/types.js";
 import { GRAPH_PATH, REPOS_DIR } from "../shared/config.js";
-import { loadOrBuildGraph, saveGraph, enrichNodes } from "../graph/index.js";
+import { loadOrBuildGraph, saveGraph, enrichNodes, embedNodes } from "../graph/index.js";
+import type { EmbeddingProvider } from "../graph/index.js";
 import { readNodeSource } from "../extraction/index.js";
 import { queryGraph } from "../graph/query.js";
 import { detectSkill, buildSkillPrompt } from "./skills.js";
@@ -20,6 +21,7 @@ type SemanticNode = import("../shared/types.js").SemanticNode;
 
 export class MrcAgent {
   private model: vscode.LanguageModelChat | null = null;
+  private embeddings: EmbeddingProvider | null = null;
   private graph: SemanticGraph | null = null;
   private cache = new Map<string, CacheEntry>();
   private readonly cacheTtlMs = 30_000;
@@ -32,13 +34,56 @@ export class MrcAgent {
 
   async initialize(token: vscode.CancellationToken): Promise<void> {
     this.model = await this.selectModel();
+    this.embeddings = await this.buildEmbeddingProvider(token);
     this.graph = await loadOrBuildGraph(this.config);
 
-    const unenriched = this.graph.nodes.filter((n) => !n.summary).length;
-    if (unenriched > 0 && !token.isCancellationRequested) {
-      // Fire enrichment in background so initialize() resolves immediately.
-      // Tool calls get the syntactic graph right away; summaries fill in over time.
-      this.runEnrichment(token).catch(() => {});
+    const needEnrich = this.graph.nodes.some((n) => !n.summary);
+    const needEmbed = !!this.embeddings && this.graph.nodes.some((n) => !n.embedding?.length);
+    if ((needEnrich || needEmbed) && !token.isCancellationRequested) {
+      // Fire background passes so initialize() resolves immediately. Tool calls
+      // get the syntactic graph right away; summaries + embeddings fill in over time.
+      this.runBackgroundPasses(token).catch(() => {});
+    }
+  }
+
+  // Wrap vscode.lm's embedding models if the host exposes them. The embeddings
+  // API is not in the stable typings yet, so feature-detect via a narrow cast;
+  // when absent we return null and retrieval stays pure BM25 — never any other LLM.
+  private async buildEmbeddingProvider(
+    token: vscode.CancellationToken
+  ): Promise<EmbeddingProvider | null> {
+    const lm = vscode.lm as unknown as {
+      selectEmbeddingModels?: (selector: { vendor?: string }) => Promise<Array<{
+        computeEmbeddings: (
+          texts: string[],
+          token?: vscode.CancellationToken
+        ) => Promise<Array<{ values: number[] }>>;
+      }>>;
+    };
+    if (typeof lm.selectEmbeddingModels !== "function") return null;
+    try {
+      const models = await lm.selectEmbeddingModels({ vendor: "copilot" });
+      if (!models || models.length === 0) return null;
+      const model = models[0];
+      return async (texts: string[]) => {
+        const res = await model.computeEmbeddings(texts, token);
+        return res.map((r) => r.values);
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  // Background: enrich summaries, then embed nodes for hybrid retrieval.
+  private async runBackgroundPasses(token: vscode.CancellationToken): Promise<void> {
+    if (this.graph?.nodes.some((n) => !n.summary)) {
+      await this.runEnrichment(token);
+    }
+    if (this.embeddings && this.graph?.nodes.some((n) => !n.embedding?.length)) {
+      if (token.isCancellationRequested) return;
+      this.graph.nodes = await embedNodes(this.graph.nodes, this.embeddings);
+      saveGraph(this.graph, this.config.graphCachePath ?? GRAPH_PATH);
+      this.cache.clear(); // drop BM25-only results cached before embeddings landed
     }
   }
 
@@ -89,8 +134,18 @@ export class MrcAgent {
     const cached = this.cache.get(key);
     if (cached && Date.now() - cached.timestamp < this.cacheTtlMs) return cached.nodes;
 
-    // Pure BM25 + graph expansion — no LLM scoring to avoid per-node credit cost.
-    const nodes = await queryGraph(this.graph, query, k);
+    // Hybrid retrieval: BM25 candidates reranked by embedding similarity when
+    // available (no per-node LLM scoring, so no chat-credit cost). Falls back to
+    // pure BM25 when embeddings aren't ready or the host lacks the API.
+    let queryEmbedding: number[] | undefined;
+    if (this.embeddings) {
+      try {
+        queryEmbedding = (await this.embeddings([query]))[0];
+      } catch {
+        queryEmbedding = undefined;
+      }
+    }
+    const nodes = await queryGraph(this.graph, query, k, undefined, queryEmbedding);
     this.cache.set(key, { nodes, timestamp: Date.now() });
     return nodes;
   }
