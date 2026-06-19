@@ -2,7 +2,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
-import { loadConfig, CONFIG_PATH, GRAPH_PATH } from "../../shared/config.js";
+import { loadConfig, resolveRepos, CONFIG_PATH, GRAPH_PATH } from "../../shared/config.js";
 import { extractRepositories } from "../../extraction/index.js";
 import { buildSyntacticGraph } from "../../graph/builder.js";
 import { saveGraph, loadGraph } from "../../graph/index.js";
@@ -51,6 +51,20 @@ export function buildCommand(): Command {
           metadata.forEach((m) =>
             console.log(chalk.gray(`  ${m.owner}/${m.name}@${m.branch}: ${m.fileCount} files`) + (m.local ? chalk.dim(" (local)") : ""))
           );
+        }
+
+        // Warn when the in-place local repo is on a different branch than the
+        // config requests — it's indexed as checked out, not the configured branch.
+        const resolved = resolveRepos(config);
+        for (const m of metadata.filter((r) => r.local)) {
+          const configured = resolved.find((r) => r.url === m.url)?.branch;
+          if (configured && m.branch && configured !== m.branch) {
+            console.log(
+              chalk.yellow("  ⚠ ") +
+              chalk.yellow(`${m.owner}/${m.name} is checked out on "${m.branch}" but config requests "${configured}".`) +
+              chalk.gray(` Indexed the checked-out branch — switch branches or update config to match.`)
+            );
+          }
         }
 
         spinner.text = "Building semantic graph…";
