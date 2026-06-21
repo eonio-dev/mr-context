@@ -42,8 +42,18 @@ without improving answer quality.
 ${MRC_BLOCK_END}\n`;
 
 const CONFIG_TEMPLATE = {
+  _comment: "Each repo is cloned as a sibling of .mrc into this workspace. include/exclude can be set per repo (overriding the global defaults below).",
   repositories: [
-    { url: "https://github.com/your-org/your-repo", branch: "main" },
+    {
+      url: "https://github.com/your-org/project-a",
+      branch: "main",
+      includePatterns: ["**/*.ts", "**/*.tsx"],
+      excludePatterns: ["**/node_modules/**", "**/dist/**", "**/*.test.*"],
+    },
+    {
+      url: "https://github.com/your-org/project-b",
+      branch: "develop",
+    },
   ],
   includePatterns: [
     "**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx",
@@ -55,6 +65,7 @@ const CONFIG_TEMPLATE = {
   ],
   maxFileSizeBytes: 100000,
   maxContextNodes: 25,
+  repomix: true,
 };
 
 export function initCommand(): Command {
@@ -68,10 +79,10 @@ export function initCommand(): Command {
 
       console.log();
       console.log(chalk.bold("  Next steps:"));
-      console.log(chalk.gray(`  1. Edit ${CONFIG_PATH} — add 2+ repositories (url + branch)`));
+      console.log(chalk.gray(`  1. Edit ${CONFIG_PATH} — add 2+ repositories (url + branch, optional per-repo include/exclude)`));
       console.log(chalk.dim("     mr-context shines with 2+ repos — its edge is cross-repo context."));
       console.log(chalk.gray("  2. Set the GITHUB_TOKEN env var for private repos (or configure SSH)"));
-      console.log(chalk.gray("  3. Run mrc build — clones repos into .mrc/repos and builds the graph\n"));
+      console.log(chalk.gray("  3. Run mrc build — clones repos as siblings of .mrc and builds the graph\n"));
     });
 }
 
@@ -89,15 +100,16 @@ function scaffoldConfig(force: boolean): void {
 }
 
 function scaffoldGitignore(): void {
-  // Keep .mrc/config.json tracked; ignore the generated graph (.mrc/data/) and
-  // the local clones (.mrc/repos/) — both live under .mrc.
+  // Keep .mrc/config.json tracked; ignore generated data (graph + repomix
+  // artifacts) under .mrc/data/. Sibling clones are ignored via the workspace
+  // root .gitignore (a managed block written/refreshed by `mrc build`).
   const mrcIgnore = resolve(process.cwd(), MRC_DIR, ".gitignore");
   if (existsSync(mrcIgnore)) {
     console.log(chalk.yellow("  skip  ") + chalk.gray(`${MRC_DIR}/.gitignore already exists`));
     return;
   }
   mkdirSync(resolve(process.cwd(), MRC_DIR), { recursive: true });
-  writeFileSync(mrcIgnore, "data/\nrepos/\n", "utf-8");
+  writeFileSync(mrcIgnore, "data/\n", "utf-8");
   console.log(chalk.green("  create") + `  ${MRC_DIR}/.gitignore`);
 }
 
