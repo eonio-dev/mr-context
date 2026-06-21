@@ -6,11 +6,10 @@ import { glob } from "glob";
 import { readFile, stat } from "fs/promises";
 import { join } from "path";
 import type { ExtractedFile, RepositoryMetadata } from "../shared/types.js";
-import { repoSlug } from "./clone.js";
 
 // Absolute base dir of a repo's files on disk. Prefers the metadata localPath
-// recorded at build time (handles both in-place local repos and clones); falls
-// back to the conventional clone slug under reposDir.
+// recorded at build time; falls back to the conventional clone folder (repo
+// name) under the clones dir.
 export function repoBasePath(
   repositories: RepositoryMetadata[],
   repository: string,
@@ -18,8 +17,8 @@ export function repoBasePath(
 ): string {
   const meta = repositories.find((r) => `${r.owner}/${r.name}` === repository);
   if (meta?.localPath) return meta.localPath;
-  const [owner, name] = repository.split("/");
-  return join(reposDir, repoSlug(owner, name ?? owner));
+  const name = repository.split("/")[1] ?? repository;
+  return join(reposDir, name);
 }
 
 // Read a node's source from disk, or null if unavailable.

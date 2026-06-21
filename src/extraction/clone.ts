@@ -14,15 +14,15 @@ const execFileAsync = promisify(execFile);
 const git = process.platform === "win32" ? "git.exe" : "git";
 const GIT_MAX_BUFFER = 64 * 1024 * 1024;
 
-// Filesystem-safe folder name for a repo, e.g. "owner__repo".
+// Filesystem-safe folder name for a repo, e.g. "owner__repo". Retained for the
+// metadata fallback path; the workspace layout clones by plain repo name instead.
 export function repoSlug(owner: string, name: string): string {
   return `${owner}__${name}`.replace(/[^a-zA-Z0-9_.-]/g, "_");
 }
 
-// Local clone path for a repo URL under the given repos directory.
-export function repoLocalPath(reposDir: string, url: string): string {
-  const { owner, name } = parseRepositoryUrl(url);
-  return join(reposDir, repoSlug(owner, name));
+// Local clone path for a repo under the workspace clones dir, by folder name.
+export function repoLocalPath(clonesDir: string, name: string): string {
+  return join(clonesDir, name);
 }
 
 // For GitHub HTTPS URLs, inject a token so private repos clone non-interactively.
@@ -72,21 +72,45 @@ export function sameRepo(a: string, b: string): boolean {
   }
 }
 
+// True if the working tree has uncommitted changes (staged or unstaged).
+async function isDirty(dir: string): Promise<boolean> {
+  try {
+    const { stdout } = await execFileAsync(git, ["-C", dir, "status", "--porcelain"], {
+      maxBuffer: GIT_MAX_BUFFER,
+    });
+    return stdout.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export interface CloneOptions {
   url: string;
   branch: string;
-  reposDir: string;
+  clonesDir: string;
+  name: string;
   githubToken?: string;
 }
 
+export interface CloneResult {
+  path: string;     // absolute working-tree path
+  dirty: boolean;   // existing clone had uncommitted changes; left untouched
+  reused: boolean;  // an existing clone was updated/kept instead of freshly cloned
+}
+
 // Clone the repo at the requested branch, or update an existing clone in place.
-// Returns the absolute local path to the working tree.
-export async function cloneOrUpdateRepo(opts: CloneOptions): Promise<string> {
-  const dest = repoLocalPath(opts.reposDir, opts.url);
+// An existing clone with uncommitted changes is NEVER reset — the developer's
+// working tree is preserved and indexed as-is (dirty=true). Clean clones are
+// fast-forwarded to the configured branch.
+export async function cloneOrUpdateRepo(opts: CloneOptions): Promise<CloneResult> {
+  const dest = repoLocalPath(opts.clonesDir, opts.name);
   const env = { ...process.env };
 
   if (existsSync(join(dest, ".git"))) {
-    // Refresh existing clone: fetch the requested branch and hard-reset to it.
+    if (await isDirty(dest)) {
+      // Preserve uncommitted work — index whatever is checked out now.
+      return { path: dest, dirty: true, reused: true };
+    }
     await execFileAsync(git, ["-C", dest, "fetch", "--depth", "1", "origin", opts.branch], {
       maxBuffer: GIT_MAX_BUFFER, env,
     });
@@ -96,10 +120,10 @@ export async function cloneOrUpdateRepo(opts: CloneOptions): Promise<string> {
     await execFileAsync(git, ["-C", dest, "reset", "--hard", `origin/${opts.branch}`], {
       maxBuffer: GIT_MAX_BUFFER, env,
     });
-    return dest;
+    return { path: dest, dirty: false, reused: true };
   }
 
-  await mkdir(opts.reposDir, { recursive: true });
+  await mkdir(opts.clonesDir, { recursive: true });
   await execFileAsync(git, [
     "clone",
     "--branch", opts.branch,
@@ -109,5 +133,5 @@ export async function cloneOrUpdateRepo(opts: CloneOptions): Promise<string> {
     dest,
   ], { maxBuffer: GIT_MAX_BUFFER, env });
 
-  return dest;
+  return { path: dest, dirty: false, reused: false };
 }

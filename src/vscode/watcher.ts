@@ -8,9 +8,9 @@ import { join, relative, resolve } from "path";
 import type { MrcConfig, SemanticGraph, ExtractedFile } from "../shared/types.js";
 import { buildNode, buildEdges } from "../graph/builder.js";
 import { saveGraph } from "../graph/index.js";
-import { GRAPH_PATH, REPOS_DIR } from "../shared/config.js";
+import { GRAPH_PATH, REPOS_DIR, resolveRepos } from "../shared/config.js";
 import { parseRepositoryUrl } from "../extraction/github.js";
-import { repoSlug, readOriginUrl, sameRepo } from "../extraction/clone.js";
+import { readOriginUrl, sameRepo } from "../extraction/clone.js";
 import type { MrcAgent } from "../agent/agent.js";
 
 const DEBOUNCE_MS = 2000;
@@ -157,21 +157,20 @@ export class FileWatcher {
       origin: readOriginUrl(f.uri.fsPath),
     }));
 
-    for (const entry of this.config.repositories) {
-      const url = typeof entry === "string" ? entry : entry.url;
+    for (const repo of resolveRepos(this.config)) {
       try {
-        const { owner, name } = parseRepositoryUrl(url);
+        const { owner, name } = parseRepositoryUrl(repo.url);
         const repository = `${owner}/${name}`;
 
-        // A workspace folder that IS this repo is indexed in place (not cloned).
-        const local = folderOrigins.find((f) => f.origin && sameRepo(f.origin, url));
+        // A workspace folder that IS this repo is watched in place.
+        const local = folderOrigins.find((f) => f.origin && sameRepo(f.origin, repo.url));
         if (local) {
           this.folderRepoMap.set(local.path, repository);
           continue;
         }
 
-        // Otherwise the repo lives in a clone under reposDir.
-        const clonePath = join(reposDir, repoSlug(owner, name));
+        // Otherwise the repo lives as a sibling clone named repo.name.
+        const clonePath = join(reposDir, repo.name);
         if (existsSync(clonePath)) {
           this.folderRepoMap.set(clonePath, repository);
         }
