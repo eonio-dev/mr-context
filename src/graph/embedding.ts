@@ -13,7 +13,7 @@ const BATCH_SIZE = 16;
 // The text we embed for a node — mirrors the BM25 document plus the summary,
 // so lexical and semantic signals describe the same surface.
 export function nodeEmbeddingText(node: SemanticNode): string {
-  return [node.filePath, node.summary, node.exports.join(" "), node.patterns.join(" ")]
+  return [node.filePath, node.summary, node.signature, node.exports.join(" "), node.patterns.join(" ")]
     .filter(Boolean)
     .join(" ");
 }

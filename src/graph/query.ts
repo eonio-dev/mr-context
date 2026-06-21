@@ -12,7 +12,7 @@ const W_EMBED = 0.5;
 function nodeDocument(node: SemanticNode): { id: string; text: string } {
   return {
     id: node.id,
-    text: [node.filePath, node.summary, node.exports.join(" "), node.patterns.join(" ")]
+    text: [node.filePath, node.summary, node.signature, node.exports.join(" "), node.patterns.join(" ")]
       .filter(Boolean)
       .join(" "),
   };
@@ -131,6 +131,7 @@ export function formatContextBlock(nodes: SemanticNode[], tokenBudget = 4000): s
     const repo = node.repository.split("/").slice(-1)[0];
     const lines = [`### ${node.filePath} [${repo}]`];
     if (node.summary) lines.push(node.summary);
+    if (node.signature) lines.push(`Signature: ${node.signature}`);
     if (node.exports.length > 0) lines.push(`Exports: ${node.exports.join(", ")}`);
     if (node.patterns.length > 0) lines.push(`Patterns: ${node.patterns.join(", ")}`);
     const section = lines.join("\n");

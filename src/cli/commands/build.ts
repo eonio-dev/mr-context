@@ -4,6 +4,7 @@ import chalk from "chalk";
 import ora from "ora";
 import { loadConfig, resolveRepos, CONFIG_PATH, GRAPH_PATH } from "../../shared/config.js";
 import { extractRepositories } from "../../extraction/index.js";
+import { enrichWithRepomix } from "../../extraction/repomix.js";
 import { buildSyntacticGraph } from "../../graph/builder.js";
 import { saveGraph, loadGraph } from "../../graph/index.js";
 
@@ -77,15 +78,30 @@ export function buildCommand(): Command {
         spinner.text = "Building semantic graph…";
         spinner.start();
         const graph = await buildSyntacticGraph(files, metadata);
-
-        saveGraph(graph, cachePath);
-
         const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
         spinner.succeed(chalk.green(`Graph built in ${elapsed}s`) + chalk.gray(` — ${graph.nodes.length} nodes, ${graph.edges.length} edges`));
 
+        // Deterministic enrichment via repomix (--compress signatures + packed
+        // artifacts). No LLM. Skipped when config.repomix === false.
+        if (config.repomix !== false) {
+          spinner.text = "Enriching with repomix (signatures + packed artifacts)…";
+          spinner.start();
+          try {
+            const r = await enrichWithRepomix(graph, config);
+            spinner.succeed(
+              chalk.green(`repomix: ${r.reposPacked}/${graph.repositories.length} repos packed`) +
+              chalk.gray(` — ${r.nodesEnriched} nodes signed, ~${r.totalTokens.toLocaleString()} tokens`)
+            );
+          } catch (err) {
+            spinner.warn(chalk.yellow(`repomix enrichment skipped: ${(err as Error).message}`));
+          }
+        }
+
+        saveGraph(graph, cachePath);
+
         console.log(chalk.bold.cyan("\n  Mr. Context at your service."));
         console.log(chalk.gray(`  ${graph.repositories.length} repositories indexed · ${graph.nodes.length} nodes · ready.\n`));
-        console.log(chalk.yellow("  Open VS Code to run semantic enrichment via the extension.\n"));
+        console.log(chalk.yellow("  Open VS Code to run semantic embeddings/summaries via the extension.\n"));
 
       } catch (err) {
         spinner.fail(chalk.red("Build failed: " + (err as Error).message));
