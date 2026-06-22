@@ -1,49 +1,24 @@
 // src/cli/commands/init.ts
 import { Command } from "commander";
 import chalk from "chalk";
-import { existsSync, mkdirSync, writeFileSync, readFileSync, appendFileSync } from "fs";
+import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { resolve } from "path";
 import { CONFIG_PATH, MRC_DIR } from "../../shared/config.js";
-
-const INSTRUCTIONS_PATH = ".github/copilot-instructions.md";
-const MRC_BLOCK_START = "<!-- mr-context:start -->";
-const MRC_BLOCK_END = "<!-- mr-context:end -->";
-
-const MRC_COPILOT_BLOCK = `\n${MRC_BLOCK_START}
-## Mr. Context — Token Shield
-
-This workspace uses [Mr. Context](https://github.com/eonio/mr-context) to pre-index all
-repositories into a semantic graph. The graph knows every file, export, import, and design
-pattern — use it instead of reading files directly.
-
-### MANDATORY: call \`#mrcAsk\` FIRST — before anything else
-
-**Before writing code, reading a file, or answering any codebase question:**
-1. Call \`#mrcAsk\` with the user's full request as the query.
-2. Use the returned context to answer or generate code.
-3. Only read individual files if a specific detail is missing from the graph result.
-
-**Never:**
-- Read files directly to understand the codebase structure
-- Guess file paths, export names, or import locations
-- Call multiple codebase search tools when \`#mrcAsk\` already returned context
-
-This rule exists to prevent unnecessary token consumption. Violating it wastes credits
-without improving answer quality.
-
-**Available tools:**
-| Tool | When to use |
-|---|---|
-| \`#mrcAsk\` | **Start here.** Retrieve ranked context for any codebase question or task |
-| \`#mrcSearch\` | Locate specific files when you know what you're looking for |
-| \`#mrcDependencies\` | Trace the import graph outward from a given file |
-| \`#mrcPattern\` | Find files implementing a design pattern (factory, repository, hook, etc.) |
-| \`#mrcFile\` | Get metadata for a known file path |
-${MRC_BLOCK_END}\n`;
+import { scaffoldCopilotAssets } from "../scaffold.js";
 
 const CONFIG_TEMPLATE = {
+  _comment: "Each repo is cloned as a sibling of .mrc into this workspace. include/exclude can be set per repo (overriding the global defaults below).",
   repositories: [
-    { url: "https://github.com/your-org/your-repo", branch: "main" },
+    {
+      url: "https://github.com/your-org/project-a",
+      branch: "main",
+      includePatterns: ["**/*.ts", "**/*.tsx"],
+      excludePatterns: ["**/node_modules/**", "**/dist/**", "**/*.test.*"],
+    },
+    {
+      url: "https://github.com/your-org/project-b",
+      branch: "develop",
+    },
   ],
   includePatterns: [
     "**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx",
@@ -55,22 +30,25 @@ const CONFIG_TEMPLATE = {
   ],
   maxFileSizeBytes: 100000,
   maxContextNodes: 25,
+  repomix: true,
 };
 
 export function initCommand(): Command {
   return new Command("init")
-    .description("Scaffold .mrc/config.json and register Mr. Context in .github/copilot-instructions.md")
-    .option("--force", "Overwrite existing .mrc/config.json", false)
+    .description("Scaffold .mrc/config.json + token-disciplined Copilot agent/skills/instructions")
+    .option("--force", "Overwrite existing config and refresh Copilot assets", false)
     .action((opts) => {
       scaffoldConfig(opts.force);
       scaffoldGitignore();
-      scaffoldCopilotInstructions();
+      scaffoldCopilotAssets(process.cwd(), opts.force);
 
       console.log();
       console.log(chalk.bold("  Next steps:"));
-      console.log(chalk.gray(`  1. Edit ${CONFIG_PATH} — set each repository's url and branch`));
+      console.log(chalk.gray(`  1. Edit ${CONFIG_PATH} — add 2+ repositories (url + branch, optional per-repo include/exclude)`));
+      console.log(chalk.dim("     mr-context shines with 2+ repos — its edge is cross-repo context."));
       console.log(chalk.gray("  2. Set the GITHUB_TOKEN env var for private repos (or configure SSH)"));
-      console.log(chalk.gray("  3. Run mrc build — clones repos into .mrc/repos and builds the graph\n"));
+      console.log(chalk.gray("  3. Run mrc build — clones repos as siblings of .mrc and builds the graph"));
+      console.log(chalk.gray("  4. In Copilot Chat, pick the \"Mr. Context Agent\" mode or run /mrc-locate\n"));
     });
 }
 
@@ -88,34 +66,15 @@ function scaffoldConfig(force: boolean): void {
 }
 
 function scaffoldGitignore(): void {
-  // Keep .mrc/config.json tracked; ignore the generated graph (.mrc/data/) and
-  // the local clones (.mrc/repos/) — both live under .mrc.
+  // Keep .mrc/config.json tracked; ignore generated data (graph + repomix
+  // artifacts) under .mrc/data/. Sibling clones are ignored via the workspace
+  // root .gitignore (a managed block written/refreshed by `mrc build`).
   const mrcIgnore = resolve(process.cwd(), MRC_DIR, ".gitignore");
   if (existsSync(mrcIgnore)) {
     console.log(chalk.yellow("  skip  ") + chalk.gray(`${MRC_DIR}/.gitignore already exists`));
     return;
   }
   mkdirSync(resolve(process.cwd(), MRC_DIR), { recursive: true });
-  writeFileSync(mrcIgnore, "data/\nrepos/\n", "utf-8");
+  writeFileSync(mrcIgnore, "data/\n", "utf-8");
   console.log(chalk.green("  create") + `  ${MRC_DIR}/.gitignore`);
-}
-
-function scaffoldCopilotInstructions(): void {
-  const filePath = resolve(process.cwd(), INSTRUCTIONS_PATH);
-
-  if (existsSync(filePath)) {
-    const content = readFileSync(filePath, "utf-8");
-
-    if (content.includes(MRC_BLOCK_START)) {
-      console.log(chalk.yellow("  skip  ") + chalk.gray(`${INSTRUCTIONS_PATH} already contains Mr. Context block`));
-      return;
-    }
-
-    appendFileSync(filePath, MRC_COPILOT_BLOCK, "utf-8");
-    console.log(chalk.green("  append") + `  ${INSTRUCTIONS_PATH}`);
-  } else {
-    mkdirSync(resolve(process.cwd(), ".github"), { recursive: true });
-    writeFileSync(filePath, MRC_COPILOT_BLOCK.trimStart(), "utf-8");
-    console.log(chalk.green("  create") + `  ${INSTRUCTIONS_PATH}`);
-  }
 }

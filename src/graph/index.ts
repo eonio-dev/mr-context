@@ -37,11 +37,13 @@ export async function loadOrBuildGraph(
   }
 
   const { files, metadata } = await extractRepositories(config);
-  const graph = buildSyntacticGraph(files, metadata);
+  const graph = await buildSyntacticGraph(files, metadata);
   saveGraph(graph, cachePath);
   return graph;
 }
 
 export { buildSyntacticGraph, buildNode } from "./builder.js";
 export { enrichNodes } from "./enrichment.js";
+export { embedNodes, nodeEmbeddingText, cosineSim } from "./embedding.js";
+export type { EmbeddingProvider } from "./embedding.js";
 export { queryGraph, formatContextBlock, buildScorer } from "./query.js";

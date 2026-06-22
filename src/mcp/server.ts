@@ -9,8 +9,8 @@
 // Config + graph are resolved from the current working directory's .mrc/
 // folder, or via MRC_CONFIG / MRC_GRAPH environment overrides.
 
-import { statSync } from "fs";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { statSync, readFileSync } from "fs";
+import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { loadConfig, resolveRepos, GRAPH_PATH } from "../shared/config.js";
@@ -181,7 +181,14 @@ server.registerResource(
       const { graph, config } = getState();
       body = {
         configured: resolveRepos(config),
-        indexed: graph.repositories,
+        indexed: graph.repositories.map((r) => ({
+          repository: `${r.owner}/${r.name}`,
+          branch: r.branch,
+          fileCount: r.fileCount,
+          dirty: r.dirty ?? false,
+          packedTokens: r.tokenCount ?? null,
+          packedResource: r.repomixPath ? `mrc://repomix/${r.name}` : null,
+        })),
         nodes: graph.nodes.length,
         edges: graph.edges.length,
         builtAt: graph.builtAt,
@@ -190,6 +197,52 @@ server.registerResource(
       body = { error: (err as Error).message };
     }
     return { contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(body, null, 2) }] };
+  }
+);
+
+// One token-efficient packed artifact per repo (repomix --compress signatures).
+// Agents read a whole repo's public surface in a single resource fetch instead
+// of many file reads — the core token-shield play, now cross-repo.
+server.registerResource(
+  "repomix-pack",
+  new ResourceTemplate("mrc://repomix/{name}", {
+    list: async () => {
+      try {
+        const { graph } = getState();
+        return {
+          resources: graph.repositories
+            .filter((r) => r.repomixPath)
+            .map((r) => ({
+              uri: `mrc://repomix/${r.name}`,
+              name: `${r.owner}/${r.name} (packed)`,
+              description: `repomix --compress signatures for ${r.owner}/${r.name}` +
+                (r.tokenCount ? ` (~${r.tokenCount.toLocaleString()} tokens)` : ""),
+              mimeType: "text/plain",
+            })),
+        };
+      } catch {
+        return { resources: [] };
+      }
+    },
+  }),
+  {
+    title: "Packed repository (repomix)",
+    description: "Token-efficient compressed API signatures for an indexed repository, packed by repomix.",
+    mimeType: "text/plain",
+  },
+  async (uri, { name }) => {
+    const repoName = Array.isArray(name) ? name[0] : name;
+    try {
+      const { graph } = getState();
+      const meta = graph.repositories.find((r) => r.name === repoName);
+      if (!meta?.repomixPath) {
+        return { contents: [{ uri: uri.href, mimeType: "text/plain", text: `No packed artifact for "${repoName}". Run \`mrc build\` with repomix enabled.` }] };
+      }
+      const text = readFileSync(meta.repomixPath, "utf-8");
+      return { contents: [{ uri: uri.href, mimeType: "text/plain", text }] };
+    } catch (err) {
+      return { contents: [{ uri: uri.href, mimeType: "text/plain", text: `Mr. Context error: ${(err as Error).message}` }] };
+    }
   }
 );
 

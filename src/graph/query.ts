@@ -1,13 +1,18 @@
 // src/graph/query.ts
 import type { SemanticNode, SemanticGraph } from "../shared/types.js";
 import { BM25 } from "./bm25.js";
+import { cosineSim } from "./embedding.js";
 
 export type LLMScorer = (query: string, nodeDescription: string) => Promise<number>;
+
+// Blend weights for hybrid retrieval (normalized BM25 + cosine similarity).
+const W_BM25 = 0.5;
+const W_EMBED = 0.5;
 
 function nodeDocument(node: SemanticNode): { id: string; text: string } {
   return {
     id: node.id,
-    text: [node.filePath, node.summary, node.exports.join(" "), node.patterns.join(" ")]
+    text: [node.filePath, node.summary, node.signature, node.exports.join(" "), node.patterns.join(" ")]
       .filter(Boolean)
       .join(" "),
   };
@@ -16,14 +21,20 @@ function nodeDocument(node: SemanticNode): { id: string; text: string } {
 /**
  * Query the semantic graph for nodes relevant to the query string.
  * Phase 1: BM25 candidate retrieval (no LLM, free).
- * Phase 2: Optional LLM rescoring of top candidates.
- * Phase 3: Graph expansion — one hop of neighbors for top-5 results.
+ * Phase 2: Hybrid rerank — blend normalized BM25 with embedding cosine
+ *          similarity when a query embedding is supplied (BM25-only otherwise).
+ * Phase 3: Optional LLM rescoring of top candidates.
+ * Phase 4: Graph expansion — one hop of neighbors for top-5 results.
+ *
+ * `queryEmbedding` comes from the VS Code extension (vscode.lm); CLI/MCP callers
+ * omit it and transparently get pure BM25.
  */
 export async function queryGraph(
   graph: SemanticGraph,
   query: string,
   topK: number,
-  scorer?: LLMScorer
+  scorer?: LLMScorer,
+  queryEmbedding?: number[]
 ): Promise<SemanticNode[]> {
   if (graph.nodes.length === 0) return [];
 
@@ -31,9 +42,28 @@ export async function queryGraph(
   const bm25Results = bm25.search(query, topK * 3);
 
   const nodeById = new Map(graph.nodes.map((n) => [n.id, n]));
-  let candidates = bm25Results
-    .map((r) => nodeById.get(r.id))
-    .filter((n): n is SemanticNode => n !== undefined);
+  const scoredByBm = bm25Results
+    .map((r) => ({ node: nodeById.get(r.id), bm: r.score }))
+    .filter((x): x is { node: SemanticNode; bm: number } => x.node !== undefined);
+
+  let candidates: SemanticNode[];
+  if (queryEmbedding && queryEmbedding.length > 0 && scoredByBm.length > 0) {
+    // Normalize BM25 to [0,1] so it blends fairly with cosine. Nodes lacking an
+    // embedding keep their BM25 signal only (cosine 0 would unfairly sink them).
+    const maxBm = Math.max(...scoredByBm.map((x) => x.bm), 1e-9);
+    candidates = scoredByBm
+      .map((x) => {
+        const hasEmb = !!x.node.embedding && x.node.embedding.length > 0;
+        const score = hasEmb
+          ? W_BM25 * (x.bm / maxBm) + W_EMBED * cosineSim(queryEmbedding, x.node.embedding)
+          : x.bm / maxBm;
+        return { node: x.node, score };
+      })
+      .sort((a, b) => b.score - a.score)
+      .map((x) => x.node);
+  } else {
+    candidates = scoredByBm.map((x) => x.node);
+  }
 
   if (scorer && candidates.length > 0) {
     const scored = await Promise.allSettled(
@@ -52,8 +82,19 @@ export async function queryGraph(
       .map((r) => r.value.node);
   }
 
-  // Graph expansion
-  const finalIds = new Set(candidates.slice(0, topK).map((n) => n.id));
+  // Build the result in ranked order (rerank order is significant: formatContextBlock
+  // cuts by token budget top-down, so the best candidates must come first).
+  const ordered: SemanticNode[] = [];
+  const seen = new Set<string>();
+  for (const node of candidates) {
+    if (ordered.length >= topK) break;
+    if (!seen.has(node.id)) {
+      ordered.push(node);
+      seen.add(node.id);
+    }
+  }
+
+  // Graph expansion: append up-to-3 neighbors of the top-5 candidates if room.
   const edgeIndex = new Map<string, string[]>();
   for (const edge of graph.edges) {
     const arr = edgeIndex.get(edge.source) ?? [];
@@ -62,11 +103,18 @@ export async function queryGraph(
   }
   for (const node of candidates.slice(0, 5)) {
     for (const neighborId of (edgeIndex.get(node.id) ?? []).slice(0, 3)) {
-      if (finalIds.size < topK) finalIds.add(neighborId);
+      if (ordered.length >= topK) break;
+      if (!seen.has(neighborId)) {
+        const neighbor = nodeById.get(neighborId);
+        if (neighbor) {
+          ordered.push(neighbor);
+          seen.add(neighborId);
+        }
+      }
     }
   }
 
-  return graph.nodes.filter((n) => finalIds.has(n.id)).slice(0, topK);
+  return ordered.slice(0, topK);
 }
 
 /**
@@ -83,6 +131,7 @@ export function formatContextBlock(nodes: SemanticNode[], tokenBudget = 4000): s
     const repo = node.repository.split("/").slice(-1)[0];
     const lines = [`### ${node.filePath} [${repo}]`];
     if (node.summary) lines.push(node.summary);
+    if (node.signature) lines.push(`Signature: ${node.signature}`);
     if (node.exports.length > 0) lines.push(`Exports: ${node.exports.join(", ")}`);
     if (node.patterns.length > 0) lines.push(`Patterns: ${node.patterns.join(", ")}`);
     const section = lines.join("\n");
